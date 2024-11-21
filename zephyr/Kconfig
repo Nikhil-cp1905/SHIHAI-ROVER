@@ -1,0 +1,4 @@
+config Tarzan
+	bool "Enable Tarzan"
+	help
+	  This option enables Tarzan as a Zephyr module.
