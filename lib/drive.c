@@ -7,6 +7,11 @@
 #define PULSE_PER_REV 200 // Define this according to your motor
 #define MINUTES_TO_MICRO 60000000
 
+// Define crab modes
+#define CRAB_MODE_0_2_1_3 0
+#define CRAB_MODE_0_1 1
+
+// Structure for Stepper Motor control
 struct StepperMotor {
     struct gpio_dt_spec dir;
     struct gpio_dt_spec step;
@@ -34,10 +39,6 @@ int init_motor_gpio(struct StepperMotor *motor) {
     return ret;
 }
 
-// Interpolate SBUS channel to velocity (keep function as-is)
-
-// Interpolate SBUS channel to PWM (keep function as-is)
-
 // Wrapper to control stepper motor movement based on SBUS channel value
 int Stepper_motor_write(struct StepperMotor *motor, uint16_t channel, uint16_t *channel_range) {
     int ret = 0;
@@ -60,39 +61,51 @@ int Stepper_motor_write(struct StepperMotor *motor, uint16_t channel, uint16_t *
 }
 
 // Control all motors
-void control_motors(uint16_t channel1, uint16_t channel2, uint16_t channel3, uint16_t channel4, uint16_t *channel_range) {
-    Stepper_motor_write(&motor1, channel1, channel_range);
-    Stepper_motor_write(&motor2, channel2, channel_range);
-    Stepper_motor_write(&motor3, channel3, channel_range);
-    Stepper_motor_write(&motor4, channel4, channel_range);
+void control_motors(uint16_t channel1, uint16_t channel2, uint16_t channel3, uint16_t channel4, uint16_t *channel_range, uint8_t crab_mode) {
+    if (crab_mode == CRAB_MODE_0_2_1_3) {
+        // Apply crab mode where motors 1 and 3 move together, 2 and 4 together
+        Stepper_motor_write(&motor1, channel1, channel_range);
+        Stepper_motor_write(&motor3, channel3, channel_range);
+        Stepper_motor_write(&motor2, channel2, channel_range);
+        Stepper_motor_write(&motor4, channel4, channel_range);
+    } else if (crab_mode == CRAB_MODE_0_1) {
+        // Apply crab mode where motors 1 and 2 move together, 3 and 4 together
+        Stepper_motor_write(&motor1, channel1, channel_range);
+        Stepper_motor_write(&motor2, channel2, channel_range);
+        Stepper_motor_write(&motor3, channel3, channel_range);
+        Stepper_motor_write(&motor4, channel4, channel_range);
+    }
 }
+  
 
 // Main control loop
 void main(void) {
-    uint16_t channel_values[4] = { /* Initialize with your channel values */ };
-    uint16_t channel_range[2] = { 1000, 2000 };
+    uint16_t channel_values[8] = {0};  // Initialize channel values
+    uint16_t channel_range[2] = {1000, 2000}; // Range for motor control
+    uint8_t crab_mode = CRAB_MODE_0_1;  // Default crab mode
 
-    // Initialize GPIO pins
+    // Initialize GPIO pins for motors
     if (init_motor_gpio(&motor1) || init_motor_gpio(&motor2) || init_motor_gpio(&motor3) || init_motor_gpio(&motor4)) {
         printk("Failed to initialize motor GPIOs\n");
         return;
     }
 
+    // Main loop
     while (1) {
-        control_motors(channel_values[0], channel_values[1], channel_values[2], channel_values[3], channel_range);
-        k_msleep(10); // Adjust this delay based on motor speed requirements
+        // Retrieve the current SBUS channel values (replace with your actual function to get SBUS data)
+        uint16_t *channel_data = parse_buffer(channel_values);
+
+        // Check SBUS channel 7 and 8 for mode switching
+        if (channel_data[7] > 1500) {
+            crab_mode = CRAB_MODE_0_2_1_3; // Switch to crab mode 0_2_1_3
+        } else if (channel_data[8] > 1500) {
+            crab_mode = CRAB_MODE_0_1; // Switch to crab mode 0_1
+        }
+
+        // Control the motors based on the crab mode and channel values
+        control_motors(channel_data[0], channel_data[1], channel_data[2], channel_data[3], channel_range, crab_mode);
+
+        k_msleep(10);  // Adjust this delay based on motor speed requirements
     }
 }
 
-/*Define PULSE_PER_REV and MINUTES_TO_MICRO constants; initialize StepperMotor struct with dir, step, position fields.
-
-Create motor1, motor2, motor3, motor4 instances with direction and step GPIO pins from device tree.
-
-Define init_motor_gpio to configure dir and step GPIOs for each motor as output.
-
-Set motor direction based on channel range; increment/decrement position; toggle step pin in 4-phase sequence for stepping.
-
-Call Stepper_motor_write for motor1, motor2, motor3, motor4 with respective channel values and range.
-
-Initialize motor GPIOs; if initialization fails, print error; loop continuously to read channels, control motors, and delay 10 ms.
-/*

@@ -8,7 +8,7 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <Tarzan/lib/kyvernitis.h> 
+#include <Tarzan/lib/kyvernitis.h>
 #include <Tarzan/lib/drive.h>
 #include <Tarzan/lib/sbus.h>
 
@@ -159,9 +159,14 @@ int main() {
         if (k_msgq_get(&uart_msgq, &packet, K_NO_WAIT) == 0) {
             ch = parse_sbus_packet(packet);
 
-            float crab_direction = (float)(ch[6] - 992) / 819;
-            crab_mode = (ch[7] > 1200) ? CRAB_MODE_0_1 : CRAB_MODE_0_2_1_3;
+            /* Crab mode selection logic based on switches */
+            if (ch[7] > 1500) {
+                crab_mode = CRAB_MODE_0_1;
+            } else if (ch[8] > 1500) {
+                crab_mode = CRAB_MODE_0_2_1_3;
+            }
 
+            float crab_direction = (float)(ch[6] - 992) / 819;
             err = crab_motion(crab_direction);
             if (err) {
                 LOG_ERR("Error executing crab motion: %d", err);
