@@ -4,3 +4,5 @@ till now we have finished crab wheel formula
 after this we need to make formulas
 going to make simulation of motor in python after making the formulas
 need to make drive code on zephyr
+finished the formula for automation
+
