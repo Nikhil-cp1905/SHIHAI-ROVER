@@ -76,7 +76,7 @@ void control_motors(uint16_t channel1, uint16_t channel2, uint16_t channel3, uin
         Stepper_motor_write(&motor4, channel4, channel_range);
     }
 }
-  
+    
 
 // Main control loop
 void main(void) {

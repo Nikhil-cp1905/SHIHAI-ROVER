@@ -8,6 +8,7 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <math.h>
 #include <Tarzan/lib/kyvernitis.h>
 #include <Tarzan/lib/drive.h>
 #include <Tarzan/lib/sbus.h>
@@ -39,8 +40,8 @@ const struct stepper_motor stepper[4] = {
 /* UART Configuration */
 K_MSGQ_DEFINE(uart_msgq, 25 * sizeof(uint8_t), 10, 1);
 
-static const struct device *const uart_dev = DEVICE_DT_GET(DT_ALIAS(mother_uart)); // SBUS data
-static const struct device *const uart_debug = DEVICE_DT_GET(DT_ALIAS(debug_uart)); // Debugger
+static const struct device *const uart_dev = DEVICE_DT_GET(DT_ALIAS(mother_uart)); 
+static const struct device *const uart_debug = DEVICE_DT_GET(DT_ALIAS(debug_uart)); 
 
 /* Control Ranges */
 static float linear_velocity_range[] = {-1.5, 1.5};
@@ -50,13 +51,28 @@ static uint32_t pwm_range[] = {1120000, 1880000};
 static float angle_range[] = {-270.0, 270.0};
 static uint16_t channel_range[] = {172, 1811};
 
-uint16_t *ch;       // SBUS channel data
-uint8_t packet[25]; // SBUS packet buffer
-int pos[2] = {0};   // Stepper motor positions
+uint16_t *ch;       
+uint8_t packet[25]; 
+int pos[2] = {0};   
 
 /* Crab Modes */
-enum CrabMode { CRAB_MODE_0_2_1_3, CRAB_MODE_0_1 };
+enum CrabMode { 
+    CRAB_MODE_0_2_1_3, 
+    CRAB_MODE_0_1,
+    CRAB_MODE_DISABLED 
+};
 enum CrabMode crab_mode = CRAB_MODE_0_2_1_3;
+
+/* PWM Motor Write Implementation */
+int pwm_motor_write(struct pwm_motor *motor, uint32_t pulse_width) {
+    return pwm_set_pulse_dt(&(motor->dev_spec), pulse_width);
+}
+
+/* Velocity to PWM Interpolation */
+float velocity_pwm_interpolation(float velocity, float *velocity_range, uint32_t *pwm_range) {
+    float normalized = (velocity - velocity_range[0]) / (velocity_range[1] - velocity_range[0]);
+    return pwm_range[0] + normalized * (pwm_range[1] - pwm_range[0]);
+}
 
 /* Function to Write Stepper Motor State */
 static int stepper_motor_write(const struct stepper_motor *motor, uint16_t ch, int pos) {
@@ -90,9 +106,9 @@ static int crab_motion(float direction) {
         err |= pwm_motor_write(&(motor[5]), interpolated_pwm);
         break;
 
+    case CRAB_MODE_DISABLED:
     default:
-        LOG_ERR("Unknown crab mode selected");
-        return -1;
+        return 0;
     }
 
     return err;
@@ -147,6 +163,19 @@ int main() {
         pwm_motor_write(&(motor[i]), 1500000);
     }
 
+    for (size_t i = 0; i < ARRAY_SIZE(stepper); i++) {
+        err = gpio_pin_configure_dt(&(stepper[i].dir), GPIO_OUTPUT_INACTIVE);
+        if (err < 0) {
+            LOG_ERR("Failed to configure stepper motor %zu direction", i);
+            return err;
+        }
+        err = gpio_pin_configure_dt(&(stepper[i].step), GPIO_OUTPUT_INACTIVE);
+        if (err < 0) {
+            LOG_ERR("Failed to configure stepper motor %zu step", i);
+            return err;
+        }
+    }
+
     err = uart_irq_callback_user_data_set(uart_dev, serial_cb, NULL);
     if (err < 0) {
         LOG_ERR("Error setting UART callback: %d", err);
@@ -164,6 +193,8 @@ int main() {
                 crab_mode = CRAB_MODE_0_1;
             } else if (ch[8] > 1500) {
                 crab_mode = CRAB_MODE_0_2_1_3;
+            } else {
+                crab_mode = CRAB_MODE_DISABLED;
             }
 
             float crab_direction = (float)(ch[6] - 992) / 819;
@@ -179,4 +210,3 @@ int main() {
     }
     return 0;
 }
-
