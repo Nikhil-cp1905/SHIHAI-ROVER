@@ -1,0 +1,27 @@
+taranis_qx7_safety_mechanism:
+ compatible: "rc-safety-trigger"
+ controller: "FrSky Taranis QX7"
+ 
+ sbus_channel:
+   number: 8  
+   activation:
+     switch_position: "up"
+     threshold_high: 1000
+     threshold_low: 0
+ 
+ safety_modes:
+   active_protection:
+     - emergency_motor_stop
+     - system_lockdown
+     - critical_function_disable
+   
+ failsafe_behaviors:
+   signal_loss:
+     - halt_all_motion
+     - safe_state_entry
+   
+ recovery_protocol:
+   manual_reset_required: true
+   reset_sequence: 
+     - switch_to_neutral
+     - confirm_safety_conditions
