@@ -1,0 +1,30 @@
+#gpio pins in phandle array, bassically an Reference to a node in the device tree,helps identify gpio pins
+
+dc_motor_controller:
+  compatible: "dc-motors"
+  description: "L293D GPIO-driven DC motor controller"
+  
+  child-binding:
+    description: "GPIO-driven DC motor node"
+    properties:
+      gpios:
+        required: true
+        type: phandle-array
+        description: "Motor control GPIO pins for PWM and direction"
+      
+      label:
+        type: string
+        description: "Human-readable identifier for the motor"
+        example: "front_left_wheel_motor"
+      
+      pwm_channel:
+        type: uint32
+        description: "PWM channel for motor speed control"
+      
+      rotation_mode:
+        type: string
+        description: "Motor rotation configuration"
+        enum: 
+          - forward
+          - reverse
+          - bidirectional

@@ -1,0 +1,26 @@
+#ESC is electronic speed control for BLDC MOTORS
+
+rover_bldc_motor_controller:
+ compatible: "bldc-motors"
+ 
+ drive_motors:
+   front_left:
+     label: "Front Left Motor"
+     controller: 
+       type: "ESC"
+       protocol: "PWM"
+
+   front_right:
+     label: "Front Right Motor"
+     controller: 
+       type: "ESC"
+       protocol: "PWM"
+
+ modes:
+   drive:
+     - standard_drive
+     - crab_motion
+   
+ safety_features:
+   - overcurrent_protection
+   - temperature_monitoring

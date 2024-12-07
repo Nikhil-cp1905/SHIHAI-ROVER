@@ -1,0 +1,52 @@
+pwm_crab_motor_controller:
+ compatible: "pwm-motors"
+ description: "PWM: crab wheel rotation"
+ 
+ child-binding:
+   description: "PWM  for crab motion"
+   properties:
+     pwms:
+       required: true
+       type: phandle-array
+       description: "PWM signal for motor control"
+     
+     min-pulse:
+       required: true
+       type: int
+       description: "Min pulse width"
+       default: 1000000  #
+     
+     max-pulse:
+       required: true
+       type: int
+       description: "Max pulse"
+       default: 2000000  
+     
+     crab_mode_params:
+       type: object
+       properties:
+         lateral_range:
+           type: int
+           description: "Maximum lateral movement angle"
+           default: 60  # degrees
+         
+         synchronization:
+           type: string
+           description: "Motor synchronization strategy"
+           enum:
+             - full_side_sync
+             - front_back_sync
+             - individual
+   
+ motors:
+   front_left:
+     label: "Front Left Crab Wheel"
+   
+   front_right:
+     label: "Front Right Crab Wheel"
+   
+   rear_left:
+     label: "Rear Left Crab Wheel"
+   
+   rear_right:
+     label: "Rear Right Crab Wheel"

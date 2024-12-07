@@ -1,0 +1,57 @@
+rover_crab_wheel_controller:
+  compatible: "stepper-motors"
+  description: "Rover crab wheel motion stepper motor controller"
+  
+  modes:
+   
+    left_right_sync:
+      description: "Synchronizes left side and right side motors"
+      left_motors:
+        - front_left_motor
+        - rear_left_motor
+      right_motors:
+        - front_right_motor
+        - rear_right_motor
+      sync_behavior: 
+        - identical_direction
+        - identical_step_pattern
+    
+     
+    front_sync:
+      description: "Synchronizes only front left and front right motors"
+      sync_motors:
+        - front_left_motor
+        - front_right_motor
+      sync_behavior:
+        - identical_direction
+        - matched_step_sequence
+  
+  motors:
+    front_left_motor:
+      label: "Front Left Wheel Motor"
+      dir-gpios: <&gpio 10 GPIO_ACTIVE_HIGH>
+      step-gpios: <&gpio 11 GPIO_ACTIVE_HIGH>
+      max-speed: 3000  
+    
+    front_right_motor:
+      label: "Front Right Wheel Motor"
+      dir-gpios: <&gpio 12 GPIO_ACTIVE_HIGH>
+      step-gpios: <&gpio 13 GPIO_ACTIVE_HIGH>
+      max-speed: 3000  
+    
+    rear_left_motor:
+      label: "Rear Left Wheel Motor"
+      dir-gpios: <&gpio 14 GPIO_ACTIVE_HIGH>
+      step-gpios: <&gpio 15 GPIO_ACTIVE_HIGH>
+      max-speed: 3000  
+    
+    rear_right_motor:
+      label: "Rear Right Wheel Motor"
+      dir-gpios: <&gpio 16 GPIO_ACTIVE_HIGH>
+      step-gpios: <&gpio 17 GPIO_ACTIVE_HIGH>
+      max-speed: 3000  
+
+  control_parameters:
+    default_mode: left_right_sync
+    transition_smoothing: true
+    acceleration_profile: trapezoidal
