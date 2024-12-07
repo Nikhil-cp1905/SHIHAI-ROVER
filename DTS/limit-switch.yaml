@@ -1,0 +1,26 @@
+bldc_crab_limit_switches:
+ compatible: "limit-switches"
+ description: "Limit switches for BLDC crab wheel motion control"
+ 
+ properties:
+   gpios:
+     type: phandle-array
+     required: true
+     description: "GPIO pins for limit switch detection"
+ 
+ switch_positions:
+     left_limit:
+       description: "Max left crab motion boundary"
+     
+     right_limit:
+       description: "Max right crab motion boundary"
+   
+     front_limit:
+       description: "Forward crab motion max"
+     
+     rear_limit:
+       description: "Reverse crab motion max"
+ 
+ safety_features:
+   - emergency_stop
+   - motion_detection
