@@ -1,0 +1,37 @@
+/dts-v1/;
+
+/ {
+    model = "BLDC Motor Controller for Rover";
+    compatible = "bldc-motors";
+
+    motor_controllers {
+        front_left: motor@0 {
+            label = "Front Left Motor";
+            controller {
+                type = "ESC";
+                protocol = "PWM";
+            };
+        };
+
+        front_right: motor@1 {
+            label = "Front Right Motor";
+            controller {
+                type = "ESC";
+                protocol = "PWM";
+            };
+        };
+    };
+
+    motor_modes {
+        drive {
+            standard_drive;
+            crab_motion;
+        };
+    };
+
+    safety_features {
+        overcurrent_protection;
+        temperature_monitoring;
+    };
+};
+
