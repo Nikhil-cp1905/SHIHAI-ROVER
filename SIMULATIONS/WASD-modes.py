@@ -6,9 +6,6 @@ import threading
 
 class CrabWheelRover:
     def __init__(self):
-        # Motor configuration
-        # Each motor has: 
-        # [current velocity, current crab wheel angle, target velocity, target crab wheel angle]
         self.motors = [
             [0.0, 0.0, 0.0, 0.0],  # Front Left Motor
             [0.0, 0.0, 0.0, 0.0],  # Front Right Motor
@@ -16,34 +13,26 @@ class CrabWheelRover:
             [0.0, 0.0, 0.0, 0.0]   # Back Right Motor
         ]
         
-        # Rover configuration constants
         self.MAX_VELOCITY = 10.0  # Maximum motor velocity
         self.MAX_CRAB_ANGLE = 45.0  # Maximum crab wheel rotation angle
         
-        # Interpolation parameters
-        self.VELOCITY_ACCELERATION_RATE = 0.3
-        self.VELOCITY_DECELERATION_RATE = 0.3
+        self.VELOCITY_ACCELERATION_RATE = 0.2
+        self.VELOCITY_DECELERATION_RATE = 0.2
         self.ANGLE_INTERPOLATION_RATE = 2.0
         
-        # State tracking
         self.running = True
         self.current_key = None
         
-        # Synchronization tracking
         self.sync_mode = None
         
-        # Key state tracking
         self.pressed_keys = set()
         
-        # Printing lock to prevent race conditions
         self.print_lock = threading.Lock()
         
-        # Interpolation thread
         self.interpolation_thread = threading.Thread(target=self.interpolate_motors)
         self.interpolation_thread.daemon = True
         self.interpolation_thread.start()
         
-        # Continuous printing thread
         self.printing_thread = threading.Thread(target=self.continuous_print)
         self.printing_thread.daemon = True
         self.printing_thread.start()
@@ -52,24 +41,21 @@ class CrabWheelRover:
         """Continuously print motor states."""
         while self.running:
             with self.print_lock:
-                # Clear the screen and move cursor to top
                 sys.stdout.write("\033[2J\033[H")
                 sys.stdout.write("Crab Wheel Rover Motor States\n")
                 sys.stdout.write("==============================\n\n")
                 
-                # Print detailed motor information
                 for i, motor in enumerate(self.motors, 1):
                     sys.stdout.write(f"Motor {i}:\n")
                     sys.stdout.write(f"  Current Velocity:     {motor[0]:7.2f}\n")
                     sys.stdout.write(f"  Target Velocity:      {motor[2]:7.2f}\n")
-                    sys.stdout.write(f"  Current Crab Angle:   {motor[1]:7.2f}\u00b0\n")
-                    sys.stdout.write(f"  Target Crab Angle:    {motor[3]:7.2f}\u00b0\n\n")
+                    sys.stdout.write(f"  Current Crab Angle:   {motor[1]:7.2f}°\n")
+                    sys.stdout.write(f"  Target Crab Angle:    {motor[3]:7.2f}°\n\n")
                 
                 sys.stdout.write(f"Current Keys: {self.pressed_keys}\n")
                 sys.stdout.write(f"Sync Mode: {self.sync_mode or 'None'}\n")
                 sys.stdout.flush()
             
-            # Small delay to prevent excessive CPU usage
             time.sleep(0.1)
 
     def interpolate_motors(self):
@@ -100,6 +86,7 @@ class CrabWheelRover:
                             motor[1] - self.ANGLE_INTERPOLATION_RATE, 
                             motor[3]
                         )
+            
             # Small delay to control interpolation speed
             time.sleep(0.05)
 
@@ -108,7 +95,6 @@ class CrabWheelRover:
         if not self.sync_mode:
             return
         
-        # Get the current angle of the first motor for reference
         ref_angle = self.motors[0][3]
         
         if self.sync_mode == '1':
@@ -126,14 +112,14 @@ class CrabWheelRover:
 
     def process_movement(self):
         """Process current pressed keys for movement."""
-        if 'w' in self.pressed_keys:
+        if 'w' in self.pressed_keys and 's' not in self.pressed_keys:
             self.set_movement(self.MAX_VELOCITY, 0.0, 'W')
-        elif 's' in self.pressed_keys:
+        elif 's' in self.pressed_keys and 'w' not in self.pressed_keys:
             self.set_movement(-self.MAX_VELOCITY, 0.0, 'S')
         
-        if 'a' in self.pressed_keys:
+        if 'a' in self.pressed_keys and 'd' not in self.pressed_keys:
             self.set_movement(self.MAX_VELOCITY, 45.0, 'A')
-        elif 'd' in self.pressed_keys:
+        elif 'd' in self.pressed_keys and 'a' not in self.pressed_keys:
             self.set_movement(self.MAX_VELOCITY, -45.0, 'D')
 
     def set_movement(self, velocity, crab_angle, key):
@@ -165,6 +151,7 @@ class CrabWheelRover:
         """Stop all motors."""
         for motor in self.motors:
             motor[2] = 0.0
+            motor[3] = 0.0  # Also reset crab wheel angles
 
     def on_press(self, key):
         """Handle key press events."""
@@ -225,5 +212,4 @@ def main():
         listener.join()
 
 if __name__ == "__main__":
-    main()
-
+    main()  
