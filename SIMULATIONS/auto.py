@@ -1,275 +1,263 @@
-import pygame
 import numpy as np
 from pynput import keyboard
-import threading
 import time
+import sys
+import threading
 import math
+from queue import Queue
 
 class CrabWheelRover:
     def __init__(self):
-        # Add position tracking
-        self.position = {"x": 0.0, "y": 0.0}
-        self.target_position = None
-        
-        # Motor configuration
+        # Motor configuration remains the same
         self.motors = [
-            {"current_velocity": 0.0, "current_angle": 0.0, "target_velocity": 0.0, "target_angle": 0.0, "color": (255, 100, 100)},  # Front Left
-            {"current_velocity": 0.0, "current_angle": 0.0, "target_velocity": 0.0, "target_angle": 0.0, "color": (100, 255, 100)},  # Front Right
-            {"current_velocity": 0.0, "current_angle": 0.0, "target_velocity": 0.0, "target_angle": 0.0, "color": (100, 100, 255)},  # Back Left
-            {"current_velocity": 0.0, "current_angle": 0.0, "target_velocity": 0.0, "target_angle": 0.0, "color": (255, 255, 100)}   # Back Right
+            [0.0, 0.0, 0.0, 0.0],  # Front Left Motor
+            [0.0, 0.0, 0.0, 0.0],  # Front Right Motor
+            [0.0, 0.0, 0.0, 0.0],  # Back Left Motor
+            [0.0, 0.0, 0.0, 0.0]   # Back Right Motor
         ]
-
-        # Performance parameters
-        self.MAX_VELOCITY = 2.0
-        self.MAX_CRAB_ANGLE = 45.0
-        self.POSITION_THRESHOLD = 5.0
-
-        # Smoothing rates
-        self.VELOCITY_ACCELERATION_RATE = 0.1
-        self.VELOCITY_DECELERATION_RATE = 0.1
-        self.ANGLE_INTERPOLATION_RATE = 2.0
-
-        # State management
-        self.running = True
-        self.pressed_keys = set()
-        self.mode = 1
-        self.auto_mode = False
         
-        # Input handling
-        self.input_text = ""
-        self.input_active = False
+        # Position tracking
+        self.x_pos = 0.0
+        self.y_pos = 0.0
+        self.target_x = 0.0
+        self.target_y = 0.0
+        self.last_update = time.time()
+        
+        # Navigation parameters
+        self.position_tolerance = 0.1  # How close we need to get to target
+        self.is_navigating = False
+        self.command_queue = Queue()
+        
+        # Rover configuration constants
+        self.MAX_VELOCITY = 10.0
+        self.MAX_CRAB_ANGLE = 45.0
+        
+        # Interpolation parameters
+        self.VELOCITY_ACCELERATION_RATE = 0.3
+        self.VELOCITY_DECELERATION_RATE = 0.3
+        self.ANGLE_INTERPOLATION_RATE = 2.0
+        
+        # State tracking
+        self.running = True
+        self.current_key = None
+        self.manual_mode = True
+        
+        # Threading setup
+        self.print_lock = threading.Lock()
+        self.start_threads()
 
-        # Threading
-        self.interpolation_thread = threading.Thread(target=self.interpolate_motors)
-        self.interpolation_thread.daemon = True
-        self.interpolation_thread.start()
+    def start_threads(self):
+        """Initialize and start all threads."""
+        threads = [
+            (self.interpolate_motors, 'interpolation'),
+            (self.update_position, 'position'),
+            (self.continuous_print, 'printing'),
+            (self.process_commands, 'command'),
+            (self.navigation_control, 'navigation')
+        ]
+        
+        for thread_func, name in threads:
+            thread = threading.Thread(target=thread_func, name=name)
+            thread.daemon = True
+            thread.start()
 
-        self.position_update_thread = threading.Thread(target=self.update_position)
-        self.position_update_thread.daemon = True
-        self.position_update_thread.start()
-
-    def set_target_position(self, x, y):
-        """Set a new target position for the rover."""
-        self.target_position = {"x": float(x), "y": float(y)}
-        self.auto_mode = True
-
-    def calculate_movement_to_target(self):
-        """Calculate required angle and velocity to reach target position."""
-        if not self.target_position or not self.auto_mode:
-            return
-
-        dx = self.target_position["x"] - self.position["x"]
-        dy = self.target_position["y"] - self.position["y"]
-        distance = math.sqrt(dx**2 + dy**2)
-
-        if distance < self.POSITION_THRESHOLD:
-            self.stop_motors()
-            self.auto_mode = False
-            print(f"Target reached: ({self.position['x']:.1f}, {self.position['y']:.1f})")
-            return
-
-        # Calculate angle to target
-        target_angle = math.degrees(math.atan2(dy, dx))
-        # Normalize angle to [-45, 45] range
-        target_angle = max(min(target_angle, self.MAX_CRAB_ANGLE), -self.MAX_CRAB_ANGLE)
-
-        # Calculate velocity based on distance
-        target_velocity = min(self.MAX_VELOCITY, distance / 50.0)
-
-        self.set_movement(target_velocity, target_angle)
-
-    def update_position(self):
-        """Update rover position based on current velocity and angle."""
+    def process_commands(self):
+        """Process commands from input queue."""
         while self.running:
-            if any(motor["current_velocity"] != 0 for motor in self.motors):
-                # Calculate average velocity and angle
-                avg_velocity = sum(motor["current_velocity"] for motor in self.motors) / len(self.motors)
-                avg_angle = sum(motor["current_angle"] for motor in self.motors) / len(self.motors)
-                
-                # Convert to radians for calculation
-                angle_rad = math.radians(avg_angle)
-                
-                # Update position
-                self.position["x"] += math.cos(angle_rad) * avg_velocity
-                self.position["y"] += math.sin(angle_rad) * avg_velocity
-
-                if self.auto_mode:
-                    self.calculate_movement_to_target()
-
+            if not self.command_queue.empty():
+                cmd = self.command_queue.get()
+                if cmd.startswith('goto'):
+                    try:
+                        _, x, y = cmd.split()
+                        self.target_x = float(x)
+                        self.target_y = float(y)
+                        self.is_navigating = True
+                        self.manual_mode = False
+                    except ValueError:
+                        print("Invalid coordinates format. Use: goto x y")
             time.sleep(0.1)
 
-    def interpolate_motors(self):
-        """Smooth motor velocity and angle transitions."""
+    def navigation_control(self):
+        """Control rover movement towards target position."""
         while self.running:
-            for motor in self.motors:
-                # Velocity interpolation
-                if motor["current_velocity"] < motor["target_velocity"]:
-                    motor["current_velocity"] = min(
-                        motor["current_velocity"] + self.VELOCITY_ACCELERATION_RATE, 
-                        motor["target_velocity"]
-                    )
-                elif motor["current_velocity"] > motor["target_velocity"]:
-                    motor["current_velocity"] = max(
-                        motor["current_velocity"] - self.VELOCITY_DECELERATION_RATE, 
-                        motor["target_velocity"]
-                    )
+            if self.is_navigating and not self.manual_mode:
+                # Calculate distance and angle to target
+                dx = self.target_x - self.x_pos
+                dy = self.target_y - self.y_pos
+                distance = math.sqrt(dx*dx + dy*dy)
                 
-                # Angle interpolation
-                if motor["current_angle"] < motor["target_angle"]:
-                    motor["current_angle"] = min(
-                        motor["current_angle"] + self.ANGLE_INTERPOLATION_RATE, 
-                        motor["target_angle"]
-                    )
-                elif motor["current_angle"] > motor["target_angle"]:
-                    motor["current_angle"] = max(
-                        motor["current_angle"] - self.ANGLE_INTERPOLATION_RATE, 
-                        motor["target_angle"]
-                    )
+                if distance < self.position_tolerance:
+                    self.stop_motors()
+                    self.is_navigating = False
+                    continue
+                
+                # Calculate desired angle and velocity
+                target_angle = math.degrees(math.atan2(dx, dy))
+                velocity = min(self.MAX_VELOCITY, distance)
+                
+                # Set movement towards target
+                self.set_movement(velocity, target_angle, 'AUTO')
             
             time.sleep(0.05)
 
-    def render_ui(self, screen):
-        """Enhanced visualization including position and target."""
-        screen.fill((30, 30, 50))
-        
-        # Draw coordinate grid
-        self.draw_grid(screen)
-        
-        # Draw rover and target
-        self.draw_rover(screen)
-        if self.target_position:
-            self.draw_target(screen)
-
-        # Title and status
-        title_font = pygame.font.Font(None, 36)
-        title = title_font.render("Crab Wheel Rover Simulation", True, (200, 200, 250))
-        screen.blit(title, (20, 20))
-        
-        # Position Display
-        pos_font = pygame.font.Font(None, 30)
-        pos_text = pos_font.render(
-            f"Current: ({self.position['x']:.1f}, {self.position['y']:.1f})", 
-            True, (200, 200, 200)
-        )
-        screen.blit(pos_text, (20, 60))
-
-        if self.target_position:
-            target_text = pos_font.render(
-                f"Target: ({self.target_position['x']:.1f}, {self.target_position['y']:.1f})", 
-                True, (200, 200, 100)
-            )
-            screen.blit(target_text, (250, 60))
-
-        # Input box
-        pygame.draw.rect(screen, (100, 100, 100), (20, 350, 300, 30), 2)
-        input_surface = pos_font.render(self.input_text, True, (255, 255, 255))
-        screen.blit(input_surface, (25, 355))
-        
-        # Instructions
-        instructions = [
-            "Enter coordinates as 'x,y' and press Enter",
-            "Press SPACE to stop",
-            "Press ESC to exit"
-        ]
-        for i, instruction in enumerate(instructions):
-            inst_text = pos_font.render(instruction, True, (180, 180, 200))
-            screen.blit(inst_text, (350, 350 + i * 25))
-
-        pygame.display.flip()
-
-    def draw_grid(self, screen):
-        """Draw coordinate grid."""
-        GRID_SIZE = 20
-        GRID_COLOR = (50, 50, 70)
-        
-        # Draw vertical lines
-        for x in range(0, 800, GRID_SIZE):
-            pygame.draw.line(screen, GRID_COLOR, (x, 0), (x, 300))
+    def update_position(self):
+        """Update rover position based on velocity and crab angle."""
+        while self.running:
+            current_time = time.time()
+            dt = current_time - self.last_update
             
-        # Draw horizontal lines
-        for y in range(0, 300, GRID_SIZE):
-            pygame.draw.line(screen, GRID_COLOR, (0, y), (800, y))
+            avg_velocity = sum(motor[0] for motor in self.motors) / 4.0
+            avg_angle = sum(motor[1] for motor in self.motors) / 4.0
+            angle_rad = math.radians(avg_angle)
+            
+            with self.print_lock:
+                self.x_pos += avg_velocity * math.sin(angle_rad) * dt
+                self.y_pos += avg_velocity * math.cos(angle_rad) * dt
+            
+            self.last_update = current_time
+            time.sleep(0.05)
 
-    def draw_rover(self, screen):
-        """Draw rover at current position."""
-        # Convert position to screen coordinates
-        screen_x = self.position["x"] * 20 + 400
-        screen_y = -self.position["y"] * 20 + 150
-        
-        # Draw rover body
-        rover_size = 10
-        pygame.draw.circle(screen, (255, 200, 0), (int(screen_x), int(screen_y)), rover_size)
-        
-        # Draw direction indicator
-        avg_angle = sum(motor["current_angle"] for motor in self.motors) / len(self.motors)
-        angle_rad = math.radians(avg_angle)
-        end_x = screen_x + math.cos(angle_rad) * rover_size * 2
-        end_y = screen_y + math.sin(angle_rad) * rover_size * 2
-        pygame.draw.line(screen, (255, 100, 0), 
-                        (int(screen_x), int(screen_y)), 
-                        (int(end_x), int(end_y)), 2)
+    def continuous_print(self):
+        """Display rover status and position information."""
+        while self.running:
+            with self.print_lock:
+                sys.stdout.write("\033[2J\033[H")
+                sys.stdout.write("Crab Wheel Rover Status\n")
+                sys.stdout.write("=====================\n\n")
+                
+                # Position information
+                sys.stdout.write(f"Current Position:\n")
+                sys.stdout.write(f"  X: {self.x_pos:7.2f}\n")
+                sys.stdout.write(f"  Y: {self.y_pos:7.2f}\n\n")
+                
+                if self.is_navigating:
+                    sys.stdout.write(f"Target Position:\n")
+                    sys.stdout.write(f"  X: {self.target_x:7.2f}\n")
+                    sys.stdout.write(f"  Y: {self.target_y:7.2f}\n")
+                    sys.stdout.write(f"Distance: {math.sqrt((self.target_x-self.x_pos)**2 + (self.target_y-self.y_pos)**2):7.2f}\n\n")
+                
+                # Mode information
+                sys.stdout.write(f"Mode: {'Manual' if self.manual_mode else 'Automatic'}\n")
+                if not self.manual_mode:
+                    sys.stdout.write(f"Navigation: {'Active' if self.is_navigating else 'Idle'}\n")
+                
+                # Motor information
+                for i, motor in enumerate(self.motors, 1):
+                    sys.stdout.write(f"Motor {i}:\n")
+                    sys.stdout.write(f"  Current Velocity:     {motor[0]:7.2f}\n")
+                    sys.stdout.write(f"  Current Crab Angle:   {motor[1]:7.2f}°\n")
+                
+                sys.stdout.write(f"\nCurrent Key: {self.current_key or 'None'}\n")
+                sys.stdout.write("\nCommands:\n")
+                sys.stdout.write("  goto x y - Navigate to coordinates\n")
+                sys.stdout.write("  WASD - Manual control\n")
+                sys.stdout.write("  M - Toggle manual/auto mode\n")
+                sys.stdout.write("  R - Reset position\n")
+                sys.stdout.write("  ESC - Exit\n")
+                
+                sys.stdout.flush()
+            time.sleep(0.1)
 
-    def draw_target(self, screen):
-        """Draw target position."""
-        screen_x = self.target_position["x"] * 20 + 400
-        screen_y = -self.target_position["y"] * 20 + 150
-        
-        # Draw target marker
-        target_size = 5
-        pygame.draw.rect(screen, (0, 255, 0), 
-                        (int(screen_x) - target_size, int(screen_y) - target_size,
-                         target_size * 2, target_size * 2))
+    def interpolate_motors(self):
+        """Continuously interpolate motor velocities and angles."""
+        while self.running:
+            with self.print_lock:
+                for motor in self.motors:
+                    # Velocity interpolation
+                    if motor[0] < motor[2]:
+                        motor[0] = min(motor[0] + self.VELOCITY_ACCELERATION_RATE, motor[2])
+                    elif motor[0] > motor[2]:
+                        motor[0] = max(motor[0] - self.VELOCITY_DECELERATION_RATE, motor[2])
+                    
+                    # Angle interpolation
+                    if motor[1] < motor[3]:
+                        motor[1] = min(motor[1] + self.ANGLE_INTERPOLATION_RATE, motor[3])
+                    elif motor[1] > motor[3]:
+                        motor[1] = max(motor[1] - self.ANGLE_INTERPOLATION_RATE, motor[3])
+            time.sleep(0.05)
+
+    def set_movement(self, velocity, crab_angle, key):
+        """Set target velocity and crab angle for all motors."""
+        self.current_key = key
+        for motor in self.motors:
+            motor[2] = velocity
+            motor[3] = crab_angle
 
     def stop_motors(self):
-        """Bring the rover to a complete stop."""
+        """Stop all motors."""
+        self.current_key = None
         for motor in self.motors:
-            motor["target_velocity"] = 0.0
-            motor["target_angle"] = 0.0
-        self.auto_mode = False
+            motor[2] = 0.0
+            motor[3] = 0.0
 
-    def set_movement(self, velocity, crab_angle):
-        """Set target velocity and angle for motors."""
-        for motor in self.motors:
-            motor["target_velocity"] = velocity
-            motor["target_angle"] = crab_angle
+    def on_press(self, key):
+        """Handle keyboard input."""
+        try:
+            k = key.char  # single-char keys
+        except:
+            k = key.name  # special keys
+        
+        if k == 'm':
+            self.manual_mode = not self.manual_mode
+            if self.manual_mode:
+                self.is_navigating = False
+                self.stop_motors()
+        
+        if self.manual_mode:
+            if k == 'w':
+                self.set_movement(self.MAX_VELOCITY, 0.0, 'W')
+            elif k == 's':
+                self.set_movement(-self.MAX_VELOCITY, 0.0, 'S')
+            elif k == 'a':
+                self.set_movement(self.MAX_VELOCITY, 45.0, 'A')
+            elif k == 'd':
+                self.set_movement(self.MAX_VELOCITY, -45.0, 'D')
+            elif k == 'space':
+                self.stop_motors()
+            elif k == 'r':
+                with self.print_lock:
+                    self.x_pos = 0.0
+                    self.y_pos = 0.0
+
+    def on_release(self, key):
+        """Handle key release events."""
+        if key == keyboard.Key.esc:
+            self.running = False
+            return False
+        
+        if self.manual_mode:
+            self.stop_motors()
+
+def input_thread(rover):
+    """Handle command line input for coordinates."""
+    while rover.running:
+        try:
+            cmd = input()
+            rover.command_queue.put(cmd)
+        except EOFError:
+            break
 
 def main():
-    pygame.init()
-    screen = pygame.display.set_mode((800, 400))
-    pygame.display.set_caption("Crab Wheel Rover Position Control")
-    
+    print("Crab Wheel Rover Simulation")
+    print("\nControls:")
+    print("Type 'goto x y' to navigate to coordinates")
+    print("M: Toggle manual/automatic mode")
+    print("WASD: Manual movement")
+    print("R: Reset position to (0,0)")
+    print("ESC: Exit\n")
+
     rover = CrabWheelRover()
-    clock = pygame.time.Clock()
     
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
-                elif event.key == pygame.K_SPACE:
-                    rover.stop_motors()
-                elif event.key == pygame.K_RETURN:
-                    try:
-                        x, y = map(float, rover.input_text.split(','))
-                        rover.set_target_position(x, y)
-                        rover.input_text = ""
-                    except:
-                        print("Invalid input. Use format: x,y")
-                        rover.input_text = ""
-                elif event.key == pygame.K_BACKSPACE:
-                    rover.input_text = rover.input_text[:-1]
-                else:
-                    if event.unicode.isprintable():
-                        rover.input_text += event.unicode
-        
-        rover.render_ui(screen)
-        clock.tick(60)
-    
-    rover.running = False
-    pygame.quit()
+    # Start input thread for coordinate commands
+    input_thread_handle = threading.Thread(target=input_thread, args=(rover,))
+    input_thread_handle.daemon = True
+    input_thread_handle.start()
+
+    # Start keyboard listener
+    with keyboard.Listener(
+            on_press=rover.on_press,
+            on_release=rover.on_release) as listener:
+        listener.join()
 
 if __name__ == "__main__":
     main()
