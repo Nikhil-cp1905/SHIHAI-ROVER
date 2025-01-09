@@ -17,7 +17,7 @@ class CrabWheelRover:
 
         # Performance parameters
         self.MAX_VELOCITY = 10.0
-        self.MAX_CRAB_ANGLE = 45.0
+        self.MAX_CRAB_ANGLE = 150.0
 
         # Smoothing rates
         self.VELOCITY_ACCELERATION_RATE = 0.3
