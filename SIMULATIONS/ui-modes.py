@@ -83,7 +83,7 @@ class CrabWheelRover:
         if self.mode == 1:
             for motor in self.motors:
                 motor["target_velocity"] = velocity
-                motor["target_angle"] = crab_angle
+                motor["target_angle"] = -crab_angle
         elif self.mode == 2:
             # Left motors
             for i in [0, 2]:
@@ -140,7 +140,7 @@ class CrabWheelRover:
                              (300, 110 + i * 40, bar_width, 20))
             
             # Angle visualization
-            angle_length = 50
+            angle_length = 100
             angle_rad = math.radians(motor['current_angle'])
             end_x = 500 + angle_length * math.cos(angle_rad)
             end_y = 110 + i * 40 + angle_length * math.sin(angle_rad)
