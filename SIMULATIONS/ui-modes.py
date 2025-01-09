@@ -81,9 +81,12 @@ class CrabWheelRover:
     def set_movement(self, velocity, crab_angle):
         """Set target velocity and angle for motors based on current mode."""
         if self.mode == 1:
-            for motor in self.motors:
-                motor["target_velocity"] = -velocity
-                motor["target_angle"] = -crab_angle
+            for i in [0, 2]:
+                self.motors[i]["target_velocity"] = velocity
+                self.motors[i]["target_angle"] = crab_angle
+            for i in [1, 3]:
+                self.motors[i]["target_velocity"] = velocity
+                self.motors[i]["target_angle"] = crab_angle 
         elif self.mode == 2:
             # Left motors
             for i in [0, 2]:
