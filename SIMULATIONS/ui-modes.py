@@ -82,7 +82,7 @@ class CrabWheelRover:
         """Set target velocity and angle for motors based on current mode."""
         if self.mode == 1:
             for motor in self.motors:
-                motor["target_velocity"] = velocity
+                motor["target_velocity"] = -velocity
                 motor["target_angle"] = -crab_angle
         elif self.mode == 2:
             # Left motors
