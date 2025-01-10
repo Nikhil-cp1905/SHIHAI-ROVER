@@ -44,7 +44,7 @@ class CrabDriveRover:
                 time.sleep(0.1)
                 continue
             
-            # Calculate movement step
+           # # Calculate movement step
             velocity = min(self.velocity_step, distance, self.max_velocity)
             dx = velocity * math.cos(math.radians(self.angle))
             dy = velocity * math.sin(math.radians(self.angle))
