@@ -134,7 +134,7 @@ class RoverGUI:
     def draw_rover(self):
         self.canvas.delete("rover")
         
-        # Convert rover position to canvas coordinates (center is 300,300)
+        ## Convert rover position to canvas coordinates (center is 300,300)
         x = 900 + self.rover.x * 40  # 40 pixels per meter
         y = 900 - self.rover.y * 40  # Negative because canvas y is inverted
         
