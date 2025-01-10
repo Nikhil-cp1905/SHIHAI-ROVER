@@ -162,7 +162,7 @@ class RoverGUI:
                 self.movement_thread = threading.Thread(target=self.movement_loop, 
                                                      daemon=True)
                 self.movement_thread.start()
-                
+            #    
         except ValueError:
             tk.messagebox.showerror("Error", "Please enter valid numbers")
             
