@@ -205,7 +205,7 @@ def main():
 
     rover = CrabWheelRover()
 
-  ##  # Collect events until released
+  ##  # #Collect events until released
     with keyboard.Listener(
             on_press=rover.on_press,
             on_release=rover.on_release) as listener:

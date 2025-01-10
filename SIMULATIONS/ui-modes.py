@@ -15,7 +15,7 @@ class CrabWheelRover:
             {"current_velocity": 0.0, "current_angle": 0.0, "target_velocity": 0.0, "target_angle": 0.0, "color": (255, 255, 100)}   # Back Right
         ]
 
-        # Performance ##parameters
+        # Performance ###parameters
         self.MAX_VELOCITY = 10.0
         self.MAX_CRAB_ANGLE = 45.0
 
